@@ -45,11 +45,9 @@ async function proxyUploadToGAS_(base64Data, fileName) {
         if (result.success && result.driveUrl) {
             return result.driveUrl; // Trả về URL Drive
         }
-        // (SỬA) Ném lỗi chi tiết từ GAS ra ngoài
         throw new Error(result.error || 'Lỗi API GAS không trả về URL.');
     } catch (e) {
         console.error('Lỗi Proxy tải ảnh lên GAS:', e.message);
-        // (SỬA) Ném lỗi ra
         throw new Error("Lỗi Proxy GAS: " + e.message);
     }
 }
@@ -58,12 +56,10 @@ async function proxyUploadToGAS_(base64Data, fileName) {
 async function convertFormDataToLarkFields_(data) {
     const imageUrls = [];
     if (data.img1_base64) {
-        // (SỬA) Gọi hàm Proxy mới
         const url1 = await proxyUploadToGAS_(data.img1_base64, data.img1_name);
         if (url1) imageUrls.push(url1);
     }
 
-    // (Logic còn lại giữ nguyên y hệt file index 2.js)
     let sdt = null; let facebook = null;
     const lienHeInput = data.lienHe || "";
     if (lienHeInput.includes('http')) facebook = lienHeInput;
@@ -93,18 +89,17 @@ async function convertFormDataToLarkFields_(data) {
     return fields;
 }
 
-// --- (Các hàm AI - Giữ nguyên code AI từ file index 2.js) ---
+// --- (Các hàm AI) ---
 let apiKeyIndex = 0;
-function getNextApiKey_() { /* ... (Giữ nguyên) ... */ }
-async function scanImageAndParseWithOpenRouter_(base64ImageData) { /* ... (Giữ nguyên) ... */ }
-async function chatWithAI_(question, filteredDataJson) { /* ... (Giữ nguyên) ... */ }
+function getNextApiKey_() { /* ... (Dán code getNextApiKey_ từ file index 2.js vào đây) ... */ }
+async function scanImageAndParseWithOpenRouter_(base64ImageData) { /* ... (Dán code scanImageAndParseWithOpenRouter_ từ file index 2.js vào đây) ... */ }
+async function chatWithAI_(question, filteredDataJson) { /* ... (Dán code chatWithAI_ từ file index 2.js vào đây) ... */ }
 
 // (APP EXPORT)
 const app = express();
 app.use(cors({ origin: true })); 
 app.use(express.json({limit: '20mb'})); 
 app.all("/", async (req, res) => {
-    // (Giữ nguyên toàn bộ logic app.all từ file index 2.js)
-    // ...
+    // ... (Dán toàn bộ logic app.all từ file index 2.js vào đây) ...
 });
 module.exports = app;
