@@ -112,18 +112,24 @@ async function proxyUploadToGAS_(base64Data, fileName) {
 
 
 
+// TRONG FILE VERCEL index.js
+
 async function convertFormDataToLarkFields_(data) {
-    const imageUrls = [];
+    let driveUrl = null; // Khởi tạo biến URL Drive
+    
+    // 1. GỌI PROXY (thực thi tải ảnh lên Drive qua GAS)
     if (data.img1_base64) {
-        // (SỬA) Gọi hàm Proxy mới để tải ảnh qua GAS
-        const url1 = await proxyUploadToGAS_(data.img1_base64, data.img1_name);
-        if (url1) imageUrls.push(url1);
+        // Hàm proxyUploadToGAS_ sẽ trả về driveUrl hoặc null
+        driveUrl = await proxyUploadToGAS_(data.img1_base64, data.img1_name);
     }
+    
+    // 2. KHỞI TẠO CÁC TRƯỜNG DỮ LIỆU CƠ BẢN
     let sdt = null; let facebook = null;
     const lienHeInput = data.lienHe || "";
     if (lienHeInput.includes('http')) facebook = lienHeInput;
     else sdt = lienHeInput;
     let trangThaiValue = "Chờ duyệt";
+    // ... (logic isAdmin và GROUP_MAP giữ nguyên)
     if (data.emailNguoiDang && await isUserAdmin_(data.emailNguoiDang)) {
         trangThaiValue = "Đã duyệt";
     }
@@ -133,6 +139,8 @@ async function convertFormDataToLarkFields_(data) {
     const LOAIDO_MAP = { "GPLX (Bằng lái xe)": "GPLX", "Giấy tờ (Chung)": "Giấy tờ" };
     const loaiDoForm = data.loaiDo;
     const loaiDoLark = LOAIDO_MAP[loaiDoForm] || loaiDoForm;
+    
+    // 3. XÂY DỰNG PAYLOAD CHO LARKBASE
     const fields = {
         "TieuDe": data.tieuDe, "MoTa": data.noiDung, "KhuVuc": data.khuVuc,
         "LoaiTin": data.dangTinLa === 'timdo' ? 'Cần tìm' : 'Nhặt được',
@@ -141,10 +149,18 @@ async function convertFormDataToLarkFields_(data) {
         "EmailNguoiDang": data.emailNguoiDang || null,
         "Latitude": data.latitude || null, "Longitude": data.longitude || null
     };
+    
     if (groupLark && groupLark.trim() !== "") fields["Group"] = [ groupLark ];
-    if (imageUrls.length > 0) fields["HinhAnhURL"] = imageUrls[0];
-    else if (data.keep_image_url) fields["HinhAnhURL"] = data.keep_image_url;
-    else fields["HinhAnhURL"] = null;
+    
+    // (QUAN TRỌNG) GÁN URL DRIVE THÀNH CÔNG VÀO TRƯỜNG HINHANHURL
+    if (driveUrl) {
+        fields["HinhAnhURL"] = driveUrl;
+    } else if (data.keep_image_url) {
+        fields["HinhAnhURL"] = data.keep_image_url;
+    } else {
+        fields["HinhAnhURL"] = null;
+    }
+    
     return fields;
 }
 
