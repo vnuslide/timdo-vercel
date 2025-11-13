@@ -28,7 +28,6 @@ const CFG = {
 // --- (Các hàm helper) ---
 let larkTokenCache = { token: null, exp: 0 };
 async function getTenantAccessToken_() {
-    // ... (Giữ nguyên code hàm này như file cũ)
     const now = Date.now();
     if (larkTokenCache.token && now < larkTokenCache.exp) return larkTokenCache.token;
     const url = CFG.HOST + '/open-apis/auth/v3/tenant_access_token/internal';
@@ -45,7 +44,6 @@ async function getTenantAccessToken_() {
 }
 
 async function callLarkAPI(method, path, payload = null) {
-    // ... (Giữ nguyên code hàm này như file cũ)
     const token = await getTenantAccessToken_();
     const url = `${CFG.HOST}${path}`;
     try {
@@ -60,7 +58,7 @@ async function callLarkAPI(method, path, payload = null) {
     } catch (e) { console.error(`Lỗi khi gọi ${method} ${path}:`, e.response ? e.response.data : e.message); throw e; }
 }
 
-// (MỚI) HÀM TẢI ẢNH BẰNG DRIVE API (SẼ HOẠT ĐỘNG)
+// (HÀM TẢI ẢNH BẰNG DRIVE API)
 function getDriveService() {
     const auth = new google.auth.GoogleAuth({
         credentials: CFG.SERVICE_ACCOUNT_KEY,
@@ -96,11 +94,12 @@ async function uploadImageToDrive_(base64Data, fileName) {
         return `https://drive.google.com/uc?id=${fileId}`;
     } catch (e) { 
         console.error('Lỗi tải ảnh lên Drive:', e.message); 
-        return null; 
+        // (QUAN TRỌNG) Ném lỗi ra để debug
+        throw new Error("Lỗi Google Drive API: " + e.message); 
     }
 }
 
-// --- (Các hàm CRUD và AI giữ nguyên) ---
+// --- (Các hàm CRUD và AI) ---
 async function bitableAddRecord_(fields) { return callLarkAPI('post', `/open-apis/bitable/v1/apps/${CFG.BASE_TOKEN}/tables/${CFG.TABLE_ID}/records`, { fields }); }
 async function bitableGetRecord_(recordId) { const data = await callLarkAPI('get', `/open-apis/bitable/v1/apps/${CFG.BASE_TOKEN}/tables/${CFG.TABLE_ID}/records/${recordId}`); return data.record; }
 async function bitableGetRecordsByEmail_(email) {
@@ -135,7 +134,7 @@ async function isUserAdmin_(email) {
 async function convertFormDataToLarkFields_(data) {
     const imageUrls = [];
     if (data.img1_base64) {
-        // (SỬA) Gọi hàm Drive API
+        // GỌI HÀM DRIVE
         const url1 = await uploadImageToDrive_(data.img1_base64, data.img1_name); 
         if (url1) imageUrls.push(url1);
     }
@@ -169,22 +168,52 @@ async function convertFormDataToLarkFields_(data) {
     return fields;
 }
 
-// --- (Các hàm AI (Giữ nguyên code từ file cũ)) ---
+// --- (Các hàm AI) ---
 let apiKeyIndex = 0;
 function getNextApiKey_() {
     const keyToUse = CFG.OPENROUTER_KEYS[apiKeyIndex];
     apiKeyIndex = (apiKeyIndex + 1) % CFG.OPENROUTER_KEYS.length;
     return keyToUse;
 }
-async function scanImageAndParseWithOpenRouter_(base64ImageData) { /* ... (Giữ nguyên code AI) ... */ }
-async function chatWithAI_(question, filteredDataJson) { /* ... (Giữ nguyên code AI) ... */ }
+
+async function scanImageAndParseWithOpenRouter_(base64ImageData) {
+    const openRouterUrl = 'https://openrouter.ai/api/v1/chat/completions';
+    const promptText = `Bạn là một trợ lý AI OCR chuyên nghiệp... (Giữ nguyên Prompt của bạn)`; // (Giữ nguyên Prompt)
+    const modelToUse = "anthropic/claude-3-haiku:latest";
+    const payload = {
+        model: modelToUse,
+        messages: [ { role: "user", content: [ { type: "text", text: promptText }, { type: "image_url", image_url: { url: base64ImageData } } ] } ],
+        response_format: { "type": "json_object" }
+    };
+    const options = { method: 'post', url: openRouterUrl, headers: { 'Authorization': `Bearer ${getNextApiKey_()}`, 'HTTP-Referer': 'https://timdosinhvien.site', 'X-Title': 'TimDoSinhVien OCR' }, data: payload };
+    const response = await axios(options);
+    const jsonResponse = response.data;
+    if (jsonResponse.error || !jsonResponse.choices) throw new Error("Lỗi từ OpenRouter: " + (jsonResponse.error ? jsonResponse.error.message : 'Phản hồi không hợp lệ'));
+    const rawJsonString = jsonResponse.choices[0].message.content;
+    const parsedData = JSON.parse(rawJsonString);
+    return { success: true, name: parsedData.ten || null, dob: parsedData.ngaySinh || null, school_code: parsedData.truong || null, item_type: parsedData.loaiDo || null, moTaNgan: parsedData.moTaNgan || null, isSensitive: parsedData.isSensitive || false, text: rawJsonString };
+}
+
+async function chatWithAI_(question, filteredDataJson) {
+    const openRouterUrl = 'https://openrouter.ai/api/v1/chat/completions';
+    const promptSystem = `Bạn là "Tư vấn viên AI" của trang... (Giữ nguyên Prompt của bạn)`; // (Giữ nguyên Prompt)
+    const modelToUse = "anthropic/claude-3-haiku:latest";
+    const payload = {
+        model: modelToUse,
+        messages: [ { role: "system", content: promptSystem }, { role: "user", content: "Đây là 10 tin đăng liên quan nhất (dạng JSON): \n" + filteredDataJson }, { role: "user", content: "Đây là câu hỏi của tôi: \n" + question } ]
+    };
+    const options = { method: 'post', url: openRouterUrl, headers: { 'Authorization': `Bearer ${getNextApiKey_()}`, 'HTTP-Referer': 'https://timdosinhvien.site', 'X-Title': 'TimDoSinhVien Chatbot' }, data: payload };
+    const response = await axios(options);
+    const jsonResponse = response.data;
+    if (jsonResponse.error || !jsonResponse.choices) throw new Error("Lỗi từ OpenRouter (Chatbot): " + (jsonResponse.error ? jsonResponse.error.message : 'Phản hồi không hợp lệ'));
+    return jsonResponse.choices[0].message.content;
+}
 
 // (APP EXPORT)
 const app = express();
 app.use(cors({ origin: true })); 
 app.use(express.json({limit: '20mb'})); 
 app.all("/", async (req, res) => {
-    // (Giữ nguyên toàn bộ logic app.all từ file cũ)
     const params = req.method === 'GET' ? req.query : req.body;
     try {
         const action = params.action;
@@ -201,7 +230,6 @@ app.all("/", async (req, res) => {
         const isAdmin = await isUserAdmin_(email);
 
         switch (action) {
-            // (Giữ nguyên tất cả các case: checkUserRole, getMyPosts, v.v...)
             case 'checkUserRole':
                 if (!email) throw new Error("Cần email để checkUserRole.");
                 return res.json({ success: true, isAdmin: isAdmin });
