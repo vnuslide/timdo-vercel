@@ -13,7 +13,7 @@ const CFG = {
     TABLE_ID: process.env.lark_table_id,
     USERS_TABLE_ID: process.env.lark_users_table_id,
     
-    // Google Drive (Sẽ hoạt động sau khi add thẻ)
+    // Google Drive
     DRIVE_FOLDER_ID: process.env.drive_folder_id, 
     
     // OpenRouter
@@ -21,8 +21,8 @@ const CFG = {
     HOST: 'https://open.larksuite.com',
     TZ: 'Asia/Ho_Chi_Minh',
     
-    // Chìa khóa vàng (Service Account)
-    SERVICE_ACCOUNT_KEY: require("./service-account-key.json") 
+    // Service Account – LẤY TỪ ENV
+    SERVICE_ACCOUNT_KEY: JSON.parse(process.env.service_account_key_json || "{}")
 };
 
 // --- (Các hàm helper) ---
