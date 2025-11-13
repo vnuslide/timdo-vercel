@@ -35,34 +35,6 @@ async function getTenantAccessToken_() {
     } catch (e) { console.error("Lỗi khi lấy token:", e.message); throw e; }
 }
 
-function getDriveService() {
-    const auth = new google.auth.GoogleAuth({
-        credentials: CFG.SERVICE_ACCOUNT_KEY,
-        scopes: ['https://www.googleapis.com/auth/drive.file']
-    });
-    return google.drive({ version: 'v3', auth });
-}
-
-async function uploadImageToDrive_(base64Data, fileName) {
-    if (!base64Data || !fileName) return null;
-    try {
-        const drive = getDriveService();
-        const mimeType = base64Data.substring(5, base64Data.indexOf(';'));
-        const fileBytes = Buffer.from(base64Data.substring(base64Data.indexOf(',') + 1), 'base64');
-        const bufferStream = new stream.PassThrough();
-        bufferStream.end(fileBytes);
-        const response = await drive.files.create({
-            requestBody: { name: fileName, parents: [CFG.DRIVE_FOLDER_ID], mimeType: mimeType },
-            media: { mimeType: mimeType, body: bufferStream }
-        });
-        const fileId = response.data.id;
-        await drive.permissions.create({
-            fileId: fileId,
-            requestBody: { role: 'reader', type: 'anyone' }
-        });
-        return `https://drive.google.com/uc?id=${fileId}`;
-    } catch (e) { console.error('Lỗi tải ảnh lên Drive:', e.message); return null; }
-}
 
 async function callLarkAPI(method, path, payload = null) {
     const token = await getTenantAccessToken_();
@@ -110,10 +82,40 @@ async function isUserAdmin_(email) {
     } catch (e) { console.error("Lỗi khi kiểm tra Admin: " + e); return false; }
 }
 
+
+// (MỚI) Hàm Proxy tải ảnh lên Drive qua GAS
+async function proxyUploadToGAS_(base64Data, fileName) {
+    if (!base64Data || !fileName) return null;
+    try {
+        const payload = {
+            action: 'uploadImageOnly',
+            img1_base64: base64Data,
+            img1_name: fileName
+        };
+
+        // Gọi URL GAS mà chúng ta đã lưu vào biến môi trường
+        const response = await axios.post(CFG.GAS_UPLOAD_URL, payload, {
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = response.data;
+        if (result.success && result.driveUrl) {
+            return result.driveUrl; // Trả về URL Drive
+        }
+        throw new Error(result.error || 'Lỗi API GAS không trả về URL.');
+
+    } catch (e) {
+        console.error('Lỗi Proxy tải ảnh lên GAS:', e.message);
+        return null;
+    }
+}
+
+
+
 async function convertFormDataToLarkFields_(data) {
     const imageUrls = [];
     if (data.img1_base64) {
-       
+        // (SỬA) Gọi hàm Proxy mới để tải ảnh qua GAS
         const url1 = await proxyUploadToGAS_(data.img1_base64, data.img1_name);
         if (url1) imageUrls.push(url1);
     }
