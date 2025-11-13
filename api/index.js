@@ -1,8 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
-const { google } = require("googleapis");
-const stream = require("stream");
+
 
 // === KHỐI CẤU HÌNH (CFG) TỔNG ===
 const CFG = {
@@ -11,7 +10,7 @@ const CFG = {
     BASE_TOKEN: process.env.lark_base_token,
     TABLE_ID: process.env.lark_table_id,
     USERS_TABLE_ID: process.env.lark_users_table_id,
-    DRIVE_FOLDER_ID: process.env.drive_folder_id,
+    GAS_UPLOAD_URL: process.env.gas_upload_url,
     OPENROUTER_KEYS: [process.env.openrouter_key1],
     HOST: 'https://open.larksuite.com',
     TZ: 'Asia/Ho_Chi_Minh',
@@ -114,7 +113,8 @@ async function isUserAdmin_(email) {
 async function convertFormDataToLarkFields_(data) {
     const imageUrls = [];
     if (data.img1_base64) {
-        const url1 = await uploadImageToDrive_(data.img1_base64, data.img1_name);
+       
+        const url1 = await proxyUploadToGAS_(data.img1_base64, data.img1_name);
         if (url1) imageUrls.push(url1);
     }
     let sdt = null; let facebook = null;
