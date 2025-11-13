@@ -178,7 +178,8 @@ function getNextApiKey_() {
 
 async function scanImageAndParseWithOpenRouter_(base64ImageData) {
     const openRouterUrl = 'https://openrouter.ai/api/v1/chat/completions';
-    const promptText = `Bạn là một trợ lý AI OCR chuyên nghiệp... (Giữ nguyên Prompt của bạn)`; // (Giữ nguyên Prompt)
+    // (QUAN TRỌNG: Bạn cần dán lại PROMPT đầy đủ của bạn vào đây)
+    const promptText = `Bạn là một trợ lý AI OCR chuyên nghiệp... (Dán prompt quét ảnh của bạn vào đây)`; 
     const modelToUse = "anthropic/claude-3-haiku:latest";
     const payload = {
         model: modelToUse,
@@ -196,7 +197,8 @@ async function scanImageAndParseWithOpenRouter_(base64ImageData) {
 
 async function chatWithAI_(question, filteredDataJson) {
     const openRouterUrl = 'https://openrouter.ai/api/v1/chat/completions';
-    const promptSystem = `Bạn là "Tư vấn viên AI" của trang... (Giữ nguyên Prompt của bạn)`; // (Giữ nguyên Prompt)
+    // (QUAN TRỌNG: Bạn cần dán lại PROMPT đầy đủ của bạn vào đây)
+    const promptSystem = `Bạn là "Tư vấn viên AI" của trang... (Dán prompt chatbot của bạn vào đây)`; 
     const modelToUse = "anthropic/claude-3-haiku:latest";
     const payload = {
         model: modelToUse,
