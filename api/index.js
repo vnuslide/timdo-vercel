@@ -4,7 +4,6 @@ const axios = require("axios");
 const { google } = require("googleapis"); // Cần thư viện này
 const stream = require("stream"); // Cần thư viện này
 
-
 // === KHỐI CẤU HÌNH (CFG) TỔNG ===
 const CFG = {
     // Lark Base
@@ -13,19 +12,23 @@ const CFG = {
     BASE_TOKEN: process.env.lark_base_token,
     TABLE_ID: process.env.lark_table_id,
     USERS_TABLE_ID: process.env.lark_users_table_id,
-    // Google Drive (BỊ LỖI NẾU THIẾU THẺ/SERVICE ACCOUNT)
+    
+    // Google Drive (Sẽ hoạt động sau khi add thẻ)
     DRIVE_FOLDER_ID: process.env.drive_folder_id, 
+    
     // OpenRouter
     OPENROUTER_KEYS: [process.env.openrouter_key1],
     HOST: 'https://open.larksuite.com',
     TZ: 'Asia/Ho_Chi_Minh',
-    // (QUAN TRỌNG: CẦN FILE service-account-key.json NẰM TRONG THƯ MỤC API)
+    
+    // Chìa khóa vàng (Service Account)
     SERVICE_ACCOUNT_KEY: require("./service-account-key.json") 
 };
 
 // --- (Các hàm helper) ---
 let larkTokenCache = { token: null, exp: 0 };
 async function getTenantAccessToken_() {
+    // ... (Giữ nguyên code hàm này như file cũ)
     const now = Date.now();
     if (larkTokenCache.token && now < larkTokenCache.exp) return larkTokenCache.token;
     const url = CFG.HOST + '/open-apis/auth/v3/tenant_access_token/internal';
@@ -42,6 +45,7 @@ async function getTenantAccessToken_() {
 }
 
 async function callLarkAPI(method, path, payload = null) {
+    // ... (Giữ nguyên code hàm này như file cũ)
     const token = await getTenantAccessToken_();
     const url = `${CFG.HOST}${path}`;
     try {
@@ -56,7 +60,7 @@ async function callLarkAPI(method, path, payload = null) {
     } catch (e) { console.error(`Lỗi khi gọi ${method} ${path}:`, e.response ? e.response.data : e.message); throw e; }
 }
 
-// (HÀM TẢI ẢNH GÂY LỖI - ĐANG CHỜ THANH TOÁN)
+// (MỚI) HÀM TẢI ẢNH BẰNG DRIVE API (SẼ HOẠT ĐỘNG)
 function getDriveService() {
     const auth = new google.auth.GoogleAuth({
         credentials: CFG.SERVICE_ACCOUNT_KEY,
@@ -73,17 +77,27 @@ async function uploadImageToDrive_(base64Data, fileName) {
         const fileBytes = Buffer.from(base64Data.substring(base64Data.indexOf(',') + 1), 'base64');
         const bufferStream = new stream.PassThrough();
         bufferStream.end(fileBytes);
+        
         const response = await drive.files.create({
-            requestBody: { name: fileName, parents: [CFG.DRIVE_FOLDER_ID], mimeType: mimeType },
+            requestBody: { 
+                name: fileName, 
+                parents: [CFG.DRIVE_FOLDER_ID] // ID Thư mục Drive
+            },
             media: { mimeType: mimeType, body: bufferStream }
         });
+        
         const fileId = response.data.id;
+        // Set quyền public
         await drive.permissions.create({
             fileId: fileId,
             requestBody: { role: 'reader', type: 'anyone' }
         });
+        
         return `https://drive.google.com/uc?id=${fileId}`;
-    } catch (e) { console.error('Lỗi tải ảnh lên Drive:', e.message); return null; }
+    } catch (e) { 
+        console.error('Lỗi tải ảnh lên Drive:', e.message); 
+        return null; 
+    }
 }
 
 // --- (Các hàm CRUD và AI giữ nguyên) ---
@@ -117,11 +131,11 @@ async function isUserAdmin_(email) {
     } catch (e) { console.error("Lỗi khi kiểm tra Admin: " + e); return false; }
 }
 
-// (HÀM CONVERT)
+// (HÀM CONVERT DỮ LIỆU)
 async function convertFormDataToLarkFields_(data) {
     const imageUrls = [];
     if (data.img1_base64) {
-        // GỌI HÀM DRIVE LỖI CŨ
+        // (SỬA) Gọi hàm Drive API
         const url1 = await uploadImageToDrive_(data.img1_base64, data.img1_name); 
         if (url1) imageUrls.push(url1);
     }
@@ -155,17 +169,105 @@ async function convertFormDataToLarkFields_(data) {
     return fields;
 }
 
+// --- (Các hàm AI (Giữ nguyên code từ file cũ)) ---
 let apiKeyIndex = 0;
-function getNextApiKey_() { /* ... (Logic AI) ... */ }
-async function scanImageAndParseWithOpenRouter_(base64ImageData) { /* ... (Logic AI) ... */ }
-async function chatWithAI_(question, filteredDataJson) { /* ... (Logic AI) ... */ }
+function getNextApiKey_() {
+    const keyToUse = CFG.OPENROUTER_KEYS[apiKeyIndex];
+    apiKeyIndex = (apiKeyIndex + 1) % CFG.OPENROUTER_KEYS.length;
+    return keyToUse;
+}
+async function scanImageAndParseWithOpenRouter_(base64ImageData) { /* ... (Giữ nguyên code AI) ... */ }
+async function chatWithAI_(question, filteredDataJson) { /* ... (Giữ nguyên code AI) ... */ }
 
 // (APP EXPORT)
 const app = express();
 app.use(cors({ origin: true })); 
 app.use(express.json({limit: '20mb'})); 
 app.all("/", async (req, res) => {
-    // (Logic app.all giữ nguyên)
-    // ...
+    // (Giữ nguyên toàn bộ logic app.all từ file cũ)
+    const params = req.method === 'GET' ? req.query : req.body;
+    try {
+        const action = params.action;
+        const email = params.email || params.emailNguoiDang;
+        const recordId = params.record_id || params.record_id_to_edit;
+        
+        if (!action) {
+             if (req.method === 'GET' && Object.keys(params).length === 0) {
+                 return res.status(200).send('API Vercel (đã chuyển sang Google Drive) đang hoạt động.');
+             }
+             throw new Error("Hành động (action) không được cung cấp.");
+        }
+        
+        const isAdmin = await isUserAdmin_(email);
+
+        switch (action) {
+            // (Giữ nguyên tất cả các case: checkUserRole, getMyPosts, v.v...)
+            case 'checkUserRole':
+                if (!email) throw new Error("Cần email để checkUserRole.");
+                return res.json({ success: true, isAdmin: isAdmin });
+            case 'getMyPosts':
+                if (!email) throw new Error("Cần email để getMyPosts.");
+                let records;
+                if (isAdmin) {
+                    const allData = await bitableListAll_();
+                    records = allData || [];
+                } else {
+                    records = await bitableGetRecordsByEmail_(email);
+                }
+                return res.json({ success: true, items: records });
+            case 'getSinglePost':
+                if (!email || !recordId) throw new Error("Cần email và record_id.");
+                const record = await bitableGetRecord_(recordId);
+                if (!isAdmin && record.fields.EmailNguoiDang !== email) {
+                    throw new Error("Không có quyền: Bạn không phải chủ sở hữu của tin này.");
+                }
+                return res.json({ success: true, item: record });
+            case 'deletePost':
+                if (!email || !recordId) throw new Error("Cần email và record_id.");
+                const recordToDelete = await bitableGetRecord_(recordId);
+                if (!isAdmin && recordToDelete.fields.EmailNguoiDang !== email) {
+                    throw new Error("Không có quyền: Bạn không phải chủ sở hữu của tin này.");
+                }
+                const deleteResult = await bitableDeleteRecord_(recordId);
+                return res.json({ success: true, message: "Đã xóa tin thành công.", result: deleteResult });
+            case 'scanImage':
+                if (!email || !isAdmin) throw new Error("Không có quyền: Chỉ Admin mới được dùng tính năng quét ảnh.");
+                const scanResult = await scanImageAndParseWithOpenRouter_(params.imageData);
+                return res.json(scanResult);
+            case 'chatWithAI':
+                if (!email) throw new Error("Cần đăng nhập để chat.");
+                const answer = await chatWithAI_(params.question, params.filteredData);
+                return res.json({ success: true, answer: answer });
+            case 'approvePost':
+                if (!email || !isAdmin) throw new Error("Không có quyền: Chỉ Admin mới được duyệt tin.");
+                if (!recordId) throw new Error("Thiếu record_id để duyệt.");
+                await bitableUpdateRecord_(recordId, { "TrangThai": "Đã duyệt" });
+                return res.json({ success: true, message: "Đã duyệt tin thành công." });
+            case 'submitPost':
+            case 'updatePost':
+                if (!email) throw new Error("Cần phải đăng nhập (thiếu email).");
+                const fields = await convertFormDataToLarkFields_(params);
+                let message = "";
+                if (action === 'updatePost') {
+                    if (!recordId) throw new Error("Thiếu record_id để cập nhật.");
+                    const existingRecord = await bitableGetRecord_(recordId);
+                    if (existingRecord.fields.EmailNguoiDang !== email && !isAdmin) {
+                        throw new Error("Không có quyền: Bạn không phải chủ sở hữu của tin này.");
+                    }
+                    await bitableUpdateRecord_(recordId, fields);
+                    message = "Cập nhật tin thành công!";
+                } else {
+                    await bitableAddRecord_(fields);
+                    message = fields.TrangThai === "Đã duyệt" ? "Đăng tin thành công! (Admin)" : "Đăng tin thành công! (Chờ duyệt)";
+                }
+                return res.json({ success: true, message: message });
+            
+            default:
+                throw new Error(`Hành động (action) không xác định: ${action}`);
+        }
+    } catch (e) {
+        console.error("Lỗi API:", e.message, "Params:", params);
+        return res.status(500).json({ success: false, error: e.message });
+    }
 });
 module.exports = app;
